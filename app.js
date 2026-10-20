@@ -2,6 +2,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const $=i=>document.getElementById(i);let me=null;
 const msg=(t,ok)=>{$('msg').className=ok?'good':'err';$('msg').textContent=t};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pill=t=>{const k={Pending:'warn',Verified:'ok',Returned:'bad','Not Evaluated':'mute',Compliant:'ok','With Deficiency':'bad',None:'mute',Approved:'ok',Held:'warn'}[t]||'mute';return `<span class="pill ${k}">${esc(t)}</span>`};
 const fmt=d=>new Date(d).toLocaleString('en-PH',{timeZone:'Asia/Manila'});
 const msgMap=e=>e.code==='23505'?'You already submitted this semester.':e.code==='23514'?'Invalid value: GWA must be 1.00-5.00 and counts must be 0 or higher.':e.message;
 
@@ -36,7 +37,7 @@ $('sub').onclick=async()=>{
 };
 async function loadMine(){
  const{data}=await sb.from('v_submissions').select('*').order('submitted_at',{ascending:false});
- $('mine').innerHTML='<tr><th>Term</th><th>GWA</th><th>Submitted</th><th>Verification</th><th>Compliance</th><th>Renewal</th></tr>'+(data||[]).map(s=>`<tr><td>${s.academic_year} S${s.semester}</td><td>${s.gwa}</td><td>${fmt(s.submitted_at)}</td><td>${s.verification_status}${s.verification_reason?'<br><small>'+esc(s.verification_reason)+'</small>':''}</td><td>${s.compliance_result}</td><td>${s.renewal_decision}</td></tr>`).join('')||'<tr><td>No submissions yet.</td></tr>';
+ $('mine').innerHTML='<tr><th>Term</th><th>GWA</th><th>Submitted</th><th>Verification</th><th>Compliance</th><th>Renewal</th></tr>'+(data||[]).map(s=>`<tr><td>${s.academic_year} S${s.semester}</td><td>${s.gwa}</td><td>${fmt(s.submitted_at)}</td><td>${pill(s.verification_status)}${s.verification_reason?'<br><small>'+esc(s.verification_reason)+'</small>':''}</td><td>${pill(s.compliance_result)}</td><td>${pill(s.renewal_decision)}</td></tr>`).join('')||'<tr><td>No submissions yet.</td></tr>';
 }
 
 // ---- Staff ----
@@ -52,13 +53,13 @@ async function loadStaff(){
  const{data:all}=await sb.from('v_submissions').select('*').eq('academic_year',ay).eq('semester',sem);
  const a=all||[],c=f=>a.filter(f).length;
  const{count}=await sb.from('scholar_assignments').select('*',{count:'exact',head:true});
- $('stats').innerHTML=[['Assigned scholars',count??0],['Pending verification',c(s=>s.verification_status==='Pending')],['Compliant',c(s=>s.compliance_result==='Compliant')],['With deficiency',c(s=>s.compliance_result==='With Deficiency')]].map(([l,v])=>`<div class="stat"><b>${v}</b>${l}</div>`).join('');
+ $('stats').innerHTML=[['Assigned scholars',count??0],['Pending verification',c(s=>s.verification_status==='Pending')],['Compliant',c(s=>s.compliance_result==='Compliant')],['With deficiency',c(s=>s.compliance_result==='With Deficiency')]].map(([l,v])=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
  let q=sb.from('v_submissions').select('*').eq('academic_year',ay).eq('semester',sem).order('student_id');
  if($('fp').value)q=q.eq('program_name',$('fp').value);if($('fc').value)q=q.eq('compliance_result',$('fc').value);
  const t=$('q').value.trim().replace(/[,()%]/g,'');if(t)q=q.or(`student_id.ilike.%${t}%,full_name.ilike.%${t}%`);
  const{data}=await q;
- $('all').innerHTML='<tr><th>ID</th><th>Name</th><th>Program</th><th>GWA/Units/F/INC/D</th><th>Evidence</th><th>Verification</th><th>Compliance</th><th>Renewal</th><th>Actions</th></tr>'+(data||[]).map(s=>`<tr><td>${esc(s.student_id)}</td><td>${esc(s.full_name)}</td><td>${esc(s.program_name)}</td><td>${s.gwa}/${s.units}/${s.failed_count}/${s.incomplete_count}/${s.dropped_count}</td><td>${esc(s.evidence_ref)}<br><small>${fmt(s.submitted_at)}</small></td><td>${s.verification_status}${s.verification_reason?'<br><small>'+esc(s.verification_reason)+'</small>':''}</td><td>${s.compliance_result}${(s.deficiency_reasons||[]).map(r=>'<br><small class="err">'+esc(r)+'</small>').join('')}</td><td>${s.renewal_decision}${s.decision_note?'<br><small>'+esc(s.decision_note)+'</small>':''}</td><td>
-<button data-a="ver" data-id="${s.id}">Verify</button> <button class="sec" data-a="ret" data-id="${s.id}">Return</button> <button data-a="eval" data-id="${s.id}">Evaluate</button> <button data-a="app" data-id="${s.id}">Approve</button> <button class="sec" data-a="hold" data-id="${s.id}">Hold</button> <button class="sec" data-a="hist" data-id="${s.id}">History</button></td></tr>`).join('')||'<tr><td>No records match.</td></tr>';
+ $('all').innerHTML='<tr><th>ID</th><th>Name</th><th>Program</th><th>Academic summary</th><th>Evidence</th><th>Verification</th><th>Compliance</th><th>Renewal</th><th>Actions</th></tr>'+(data||[]).map(s=>`<tr><td>${esc(s.student_id)}</td><td>${esc(s.full_name)}</td><td>${esc(s.program_name)}</td><td><b>GWA ${s.gwa}</b><br><small>${s.units} units, ${s.failed_count} failed, ${s.incomplete_count} INC, ${s.dropped_count} dropped</small></td><td>${esc(s.evidence_ref)}<br><small>${fmt(s.submitted_at)}</small></td><td>${pill(s.verification_status)}${s.verification_reason?'<br><small>'+esc(s.verification_reason)+'</small>':''}</td><td>${pill(s.compliance_result)}${(s.deficiency_reasons||[]).map(r=>'<br><small class="err">'+esc(r)+'</small>').join('')}</td><td>${pill(s.renewal_decision)}${s.decision_note?'<br><small>'+esc(s.decision_note)+'</small>':''}</td><td>
+<div class="acts"><span class="grp"><button class="sm" data-a="ver" data-id="${s.id}">Verify</button><button class="sm ghost" data-a="ret" data-id="${s.id}">Return</button></span><span class="grp"><button class="sm" data-a="eval" data-id="${s.id}">Evaluate</button></span><span class="grp"><button class="sm ok" data-a="app" data-id="${s.id}">Approve</button><button class="sm ghost" data-a="hold" data-id="${s.id}">Hold</button></span><button class="link" data-a="hist" data-id="${s.id}">History</button></div></td></tr>`).join('')||'<tr><td>No records match.</td></tr>';
 }
 $('all').onclick=async e=>{
  const b=e.target.closest('button');if(!b)return;const id=b.dataset.id,a=b.dataset.a;let r;
